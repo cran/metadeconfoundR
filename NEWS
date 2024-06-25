@@ -1,0 +1,85 @@
+Version 1.0.2
+  - fixes for CRAN resubmission
+
+Version 1.0.0
+  - CRAN submission
+
+Version 0.3.1
+  - reduced side effects after interrupted metadeconfoundR runs (tmp file removal)
+  - bugfix: Qcutoff now correctly used to collect potential confounders from naive associations
+  - improved initial input data quality control (order, problematic row-/colnames, class)
+  - minor bugfixes in Buildheatmap()
+  - added LogLevel argument to change verbositiy of logging
+
+Version 0.3.0
+  - randomVar argument is now simplified: just supply character vector of metaMat variables to be treated as random effects (e.g. randomVar = c("var1", "var5"))
+  - NEW fixedVar argument implemented: same usage as randomVar, but adds fixed effect terms to all models
+  - implemented computational speed-up for datasets with large number of metavariables
+  - metadeconfoundR is now compatible with Unix AND Windows operation systems
+  - fixed a bug that lead to an error when a feature with extremely low number non-NA values was present in featureMat
+  - improved error messaging for an error in BuildHeatmap function
+  - addition of NEW "rawCount" mode, that runs modelling steps on not normalized/rarefied data by including totalReadCount per sample information into glm/glmer comparisons
+    - for naive significance test and effect size calculation, rawCounts will be normalized by dividing by totalReadCount per sample
+  - updated implementation of logistic regression mode: test for association of binary features to metavariables by setting "logistic = TRUE"
+  - experimental NEW feature: return all computed models alongside normal Metadeconfound() output by setting collectMods = TRUE. WARNING: For now, this only works without utilizing parallel processing in the model building step. Larger datasets might take a lot of time processing.
+  - NEW BuildHeatmap() argument "tileBordCol" sets tile border color (Default "black")
+  - NEW BuildHeatmap() argument "reOrder" to turn on/of sorting of features and metavariables in the reulsting plot
+
+Version 0.2.8
+  - changes in status label names and corresponding plotting behavior
+  - reversed default color scheme for effect size plotting (red = low, blue= high)
+  - computation of confidence intervals in model building step now default
+  (with added OK_d label for deconfounded but doubtful associations)
+
+Version 0.2.7
+  - improved error messages and behavior for no/low number of significant associations
+    - can now plot results with only a single feature/and or metadata
+
+Version 0.2.6
+  - fixed bug in legend creation of BuildHeatmap(cuneiform = TRUE), direction of association now labeled correctly
+
+Version 0.2.5
+  - fixed bug in "keepFeature" functionality of BuildHeatmap()
+  - fixed bug in BuildHeatmap() that resulted in incomplete removal of features showing not a single significant association
+  - implemented speedup for runs of Metadeconfound(startStop = "naiveStop") with large number of metadata
+
+Version 0.2.4
+  - Buildheatmap(cuneiform = TRUE) can now handle NA or zero effect sizes (added NEW symbol)
+
+Version 0.2.3
+  - fixed bug that only occurred when metadata only has one column
+  - implemented speedup when startStop = "naiveStop"
+
+Version 0.2.2
+  - added functionality to BuildHeatmap()
+    - range of shown effectsizes in using d_range parameter (set to "full" for consistent legend between plots)
+    - range of colors used to show effect sizes can be changed using d_col
+    - matavariables and features, that should be kept in the plot even without passing q_cutoff and d_cutoff cutoffs, can be supplied using keepMeta and keepFeature parameters
+
+Version 0.2.1
+  - added functionality to Metadeconfound()
+    - output can now also be generated in long format
+  - added functionality to BuildHeatmap()
+    - input can now also be read in long format
+    - "human readable"" names for features and metadata can be supplied in addition to the Metadeconfound() output and will be plotted instead of "machine readable" names
+  - slightly improved help pages
+
+Version 0.2.0
+  - NEW function ImportLongPrior() to easily import prior knowledge of feature
+  metadata associations present in the current dataset.
+  - slightly improved help pages
+
+Version 0.1.9
+	-	bugfix concerning random effect variable behavior
+	-	minor aesthetic improvements in BuildHeatmap() output
+
+Version 0.1.8
+	-	introduction of global parameter "logistic"
+		-	logistic = TRUE: analyzing binary features instead of continuous using logistic regression models
+
+Version 0.1.7
+
+	-	bug fix in BuildHeatmap function
+
+Version 0.1.2
+    -   critical bug fixed, that resulted in greatly increased "NS" status labeling
