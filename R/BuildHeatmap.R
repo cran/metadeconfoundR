@@ -7,10 +7,10 @@
 #' low-significance entries from data
 #' @param d_cutoff optional effect size cutoff used to remove
 #' low effect size entries from data
-#' @param d_range range of effect sizes shown; "full": (default) range from
-#' -1 to +1;
+#' @param d_range range of effect size colors shown; "full": (default) range from
+#' -1 to +1 (best for comparability between multiple plots);
 #' "fit": range reduced according to maximum and minimum effect size
-#' present in resulting plot
+#' present in resulting plot (better color resolution for weaker effects)
 #' @param d_col set color range for effect size as c(minimum, middle, maximum),
 #' default c("red", "white", "blue")
 #' @param cuneiform optional logical parameter,
@@ -43,7 +43,13 @@
 #' @param trusted character vector of confounding status labels to be treated
 #' as trustworthy, not-confounded signal. default = c("OK_sd", "OK_nc", "OK_d", "AD")
 #' @param tileBordCol tile border color of  heatmap tiles, default: "black"
-#' @param reOrder reorder features and/or metadata? possible options: c("both", "feat", "meta", "none"), default: "both"
+#' @param reOrder reorder features and/or metadata? possible options: c("both",
+#' "feat", "meta", "none"), default: "both"
+#' @param plotPartial choose which effect site should be plotted.
+#' options: c("Ds", "partial", "partialRel, partialNorm"), default: "Ds"
+#' @param starSize size of asterisks/circles in resulting heatmap, default: 2
+#' @param starNudge_y nudge y-axis position of asterisks/circles in
+#' resulting heatmap, default: 0
 #' @return ggplot2 object
 #' @details for more details and explanations please see the package vignette.
 #' @examples
@@ -63,6 +69,7 @@
 #' @importFrom reshape2 melt
 #' @importFrom methods is
 #' @importFrom rlang .data
+#' @importFrom stats na.exclude hclust dist as.formula median var lm
 #' @export
 
 BuildHeatmap <- function(metaDeconfOutput,
@@ -74,13 +81,16 @@ BuildHeatmap <- function(metaDeconfOutput,
                          intermedData = FALSE,
                          featureNames = NULL,
                          metaVariableNames = NULL,
-                         d_range = "fit",
+                         d_range = "full",
                          d_col = c("blue", "white", "red"),
                          keepMeta = NULL,
                          keepFeature = NULL,
                          trusted = c("OK_sd", "OK_nc", "OK_d", "AD"),
                          tileBordCol = "black",
-                         reOrder = "both"
+                         reOrder = "both",
+                         plotPartial = "Ds", # 20240905 TB
+                         starSize = 2, # 20241114 TB
+                         starNudge_y = 0
                          ) {
 
 
@@ -119,19 +129,37 @@ BuildHeatmap <- function(metaDeconfOutput,
     status <- reshape2::melt(data = metaDeconfOutput$status,
                    varnames = c("feature", "metaVariable"),
                    value.name = "status")
-  } else if (ncol(metaDeconfOutput) == 9) {
+  } else if ((sum(c("stars", "insignificant", "featureNames") %in% colnames(metaDeconfOutput))) == 3) {
     warning("treating input as 'intermedData = T' Buildheatmap output!!")
     fromIntermed <- TRUE
     effectSize <- metaDeconfOutput
 
   } else {
-    effectSize <- metaDeconfOutput[, c("feature", "metaVariable", "Ds")]
+
+    if (!"groupingVar" %in% colnames(metaDeconfOutput)) {
+      metaDeconfOutput$groupingVar <- "metadata"
+    }
+    effectSize <- metaDeconfOutput[, c("feature", "metaVariable", "Ds", "groupingVar")]
+
+    if (plotPartial == "partial") {
+      effectSize$Ds <- metaDeconfOutput$partial
+      keepMeta <- unique(c(keepMeta, "maxRsq")) # always show total explainable Rsq if applicable
+    } else if (plotPartial == "partialRel") {
+      effectSize$Ds <- metaDeconfOutput$partialRel
+    } else if (plotPartial == "partialNorm") {
+      effectSize$Ds <- metaDeconfOutput$partialNorm
+    }
+
     fdr <- metaDeconfOutput[, c("feature", "metaVariable", "Qs")]
     status <- metaDeconfOutput[, c("feature", "metaVariable", "status")]
 
     effectSize$Ds[effectSize$Ds == Inf] <- 0
     effectSize$Ds[is.na(effectSize$Ds)] <- 0
     fdr$Qs[is.na(fdr$Qs)] <- 1
+  }
+
+  if (is.null(effectSize$groupingVar)) {
+    effectSize$groupingVar <- "metadata"
   }
 
   if (!fromIntermed) {
@@ -268,6 +296,13 @@ BuildHeatmap <- function(metaDeconfOutput,
              levels = levels(as.factor(effectSize$metaVariable)) [ord2])
   }
 
+  if (plotPartial == "partial") {
+    # put the additional "maxRsq" column in last position always
+    effectSize$metaVariable <- factor(effectSize$metaVariable, levels = c(setdiff(
+      levels(effectSize$metaVariable), "maxRsq"
+    ), "maxRsq"))
+  }
+
 
   # ord <- hclust(dist(eff_cast, method = "euclidean"), method = "ward.D")$order
   # eff_cast <- scale(t(eff_cast))
@@ -347,8 +382,12 @@ BuildHeatmap <- function(metaDeconfOutput,
     legendShapes <- c(8)
   }
 
-  # include added name coluns into plots!!
+  # include added name colums into plots!!
   if (cuneiform) {
+
+    if (length(signifMeaning) == 2) {
+      signifMeaning[1] <- "confounded/\nnot significant"
+    }
 
     # put together needed shapes and their meaning
     divShapes <- c()
@@ -379,7 +418,7 @@ BuildHeatmap <- function(metaDeconfOutput,
                            mid = d_col[2],
                            high = d_col[3],
                            midpoint = 0,
-                           guide = guide_colorbar (raster = F),
+                           guide = guide_colorbar (display = "gradient"),
                            limits = c(lowerLim,upperLim)) +
       # the shape lines color indicate confounding status
       scale_color_manual(name = "Confounding status",
@@ -387,7 +426,7 @@ BuildHeatmap <- function(metaDeconfOutput,
                          labels = signifMeaning) +
       guides(#shape = FALSE,
              color = guide_legend(override.aes = list(shape  = 24))) +
-
+      facet_grid(cols = vars(.data$groupingVar), space = "free_x", drop = T, scales = "free_x") +
       # make it pretty
       theme_classic() +
       theme(axis.text.x = element_text(size = 7,
@@ -399,7 +438,9 @@ BuildHeatmap <- function(metaDeconfOutput,
                                        hjust = 1,
                                        vjust = 0.35),
             plot.title.position = "plot",
-            plot.title = element_text(hjust = 0)) +
+            plot.title = element_text(hjust = 0),
+            strip.background = element_blank()
+      ) +
       labs(title="Summarizing cuneiform plot",
            #subtitle="FDR-values: < 0.001 = ***, < 0.01 = **, < 0.1 = * ",
            x = "Metadata variables",
@@ -414,17 +455,17 @@ BuildHeatmap <- function(metaDeconfOutput,
                            mid = d_col[2],
                            high = d_col[3],
                            midpoint = 0,
-                           guide = guide_colorbar (raster = F),
+                           guide = guide_colorbar (display = "gradient"),
                            limits = c(lowerLim,upperLim)) +
       # add significance stars/circles for deconfounded/confounded associations
       geom_text(aes(label= .data$stars, colour = .data$status),
-                size=2,
-                key_glyph = "point") +
+                size=starSize,
+                key_glyph = "point", nudge_y = starNudge_y) +
       scale_color_manual(name = "confounding status",
                          values = signifCol,
                          labels = signifMeaning) +
       guides(color = guide_legend(override.aes = list(shape = legendShapes) ) ) +
-
+      facet_grid(cols = vars(.data$groupingVar), space = "free_x", drop = T, scales = "free_x") +
       # make it pretty
       theme_classic() +
       theme(axis.text.x = element_text(size = 7,
@@ -437,7 +478,10 @@ BuildHeatmap <- function(metaDeconfOutput,
                                        vjust = 0.35),
             plot.title.position = "plot",
             plot.title = element_text(hjust = 0),
-            plot.subtitle=element_text(size=8)) +
+            plot.subtitle=element_text(size=8),
+            strip.background = element_blank()
+
+            ) +
       labs(title="Summarizing heatmap",
            subtitle="p.adjust-values: < 0.001 = ***, < 0.01 = **, < 0.1 = * ",
            x = "Metadata variables",
